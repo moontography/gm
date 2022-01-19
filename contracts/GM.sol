@@ -50,8 +50,8 @@ contract GM is Context, IERC20, Ownable {
   uint8 _sellTaxMultiplier = 1;
 
   uint256 private _maxTxAmount = 300000000000000e9;
-  // We will set a minimum amount of tokens to be swaped => 5M
-  uint256 private _numOfTokensToExchangeForTeam = 5 * 10**3 * 10**9;
+  // We will set a minimum amount of tokens to be swapped => 5M
+  uint256 private _minTokensToSwap = 5 * 10**3 * 10**9;
 
   struct AirdropReceiver {
     address addy;
@@ -318,8 +318,7 @@ contract GM is Context, IERC20, Ownable {
       contractTokenBalance = _maxTxAmount;
     }
 
-    bool overMinTokenBalance = contractTokenBalance >=
-      _numOfTokensToExchangeForTeam;
+    bool overMinTokenBalance = contractTokenBalance >= _minTokensToSwap;
     if (
       !inSwap &&
       swapEnabled &&
