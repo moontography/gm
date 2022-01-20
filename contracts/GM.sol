@@ -32,7 +32,7 @@ contract GM is Context, IERC20, Ownable {
   string private _symbol = 'GM';
   uint8 private _decimals = 9;
 
-  uint256 private _taxFee = 5;
+  uint256 private _taxFee = 0;
   uint256 private _teamFee = 5;
   uint256 private _previousTaxFee = _taxFee;
   uint256 private _previousTeamFee = _teamFee;
