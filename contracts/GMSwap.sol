@@ -61,13 +61,4 @@ contract GMSwap is Ownable {
     require(_amount > 0, 'make sure there is a balance available to withdraw');
     _token.transfer(owner(), _amount);
   }
-
-  function withdrawETH(uint256 _amount) external onlyOwner {
-    _amount = _amount > 0 ? _amount : address(this).balance;
-    require(_amount > 0, 'make sure there is ETH available to withdraw');
-    payable(owner()).call{ value: _amount }('');
-  }
-
-  // to recieve ETH from external wallets
-  receive() external payable {}
 }
