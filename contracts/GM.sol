@@ -23,7 +23,8 @@ contract GM is ERC20, Ownable {
   address public uniswapV2Pair;
 
   mapping(address => bool) private _isBot;
-  address[] private _confirmedBots;
+
+  bool public canOwnerWithdraw = true;
 
   bool private _swapEnabled = true;
   bool private _swapping = false;
@@ -34,7 +35,7 @@ contract GM is ERC20, Ownable {
   }
 
   constructor() ERC20('gm', 'GM') {
-    _mint(address(this), 1_000_000_000_000 * 10**18);
+    _mint(msg.sender, 1_000_000_000_000 * 10**18);
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -49,24 +50,8 @@ contract GM is ERC20, Ownable {
     _isTaxExcluded[msg.sender] = true;
   }
 
-  // _supplyPercentLp: 1 = 0.1%, 1000 = 100%
-  function launch(uint16 _supplyPercentLp) external payable onlyOwner {
+  function startTrading() external onlyOwner {
     require(launchTime == 0, 'already launched');
-    require(msg.value > 0, 'need ETH for initial LP');
-    require(
-      _supplyPercentLp <= PERCENT_DENOMENATOR,
-      'cannot add more than supply to LP'
-    );
-
-    uint256 _supplyForLp = (totalSupply() * _supplyPercentLp) /
-      PERCENT_DENOMENATOR;
-    uint256 _leftover = totalSupply() - _supplyForLp;
-    if (_supplyForLp > 0) {
-      _addLp(_supplyForLp, msg.value);
-    }
-    if (_leftover > 0) {
-      _transfer(address(this), owner(), _leftover);
-    }
     launchTime = block.timestamp;
   }
 
@@ -90,7 +75,6 @@ contract GM is ERC20, Ownable {
     if (_isSwap) {
       if (block.timestamp == launchTime) {
         _isBot[recipient] = true;
-        _confirmedBots.push(recipient);
       }
     }
 
@@ -147,18 +131,6 @@ contract GM is ERC20, Ownable {
     }
   }
 
-  function _addLp(uint256 tokenAmount, uint256 ethAmount) private {
-    _approve(address(this), address(uniswapV2Router), tokenAmount);
-    uniswapV2Router.addLiquidityETH{ value: ethAmount }(
-      address(this),
-      tokenAmount,
-      0,
-      0,
-      treasury == address(0) ? owner() : treasury,
-      block.timestamp
-    );
-  }
-
   function _processFees(uint256 amountETH) private {
     address payable _treasury = treasury == address(0)
       ? payable(owner())
@@ -166,36 +138,28 @@ contract GM is ERC20, Ownable {
     _treasury.call{ value: amountETH }('');
   }
 
-  function isRemovedBot(address account) external view returns (bool) {
+  function isBlacklisted(address account) external view returns (bool) {
     return _isBot[account];
   }
 
-  function removeBot(address account) external onlyOwner {
+  function blacklistBot(address account) external onlyOwner {
     require(
       account != address(uniswapV2Router),
       'cannot not blacklist Uniswap'
     );
     require(!_isBot[account], 'user is already blacklisted');
     _isBot[account] = true;
-    _confirmedBots.push(account);
   }
 
-  function amnestyBot(address account) external onlyOwner {
+  function forgiveBot(address account) external onlyOwner {
     require(_isBot[account], 'user is not blacklisted');
-    for (uint256 i = 0; i < _confirmedBots.length; i++) {
-      if (_confirmedBots[i] == account) {
-        _confirmedBots[i] = _confirmedBots[_confirmedBots.length - 1];
-        _isBot[account] = false;
-        _confirmedBots.pop();
-        break;
-      }
-    }
+    _isBot[account] = false;
   }
 
   function setTaxTreasury(uint256 _tax) external onlyOwner {
     require(
-      _tax <= (PERCENT_DENOMENATOR * 20) / 100,
-      'tax cannot be above 20%'
+      _tax <= (PERCENT_DENOMENATOR * 30) / 100,
+      'tax cannot be above 30%'
     );
     _taxTreasury = _tax;
   }
@@ -205,7 +169,10 @@ contract GM is ERC20, Ownable {
   }
 
   function setLiquifyRate(uint256 _rate) external onlyOwner {
-    require(_rate <= PERCENT_DENOMENATOR / 10, 'cannot be more than 10%');
+    require(
+      _rate <= (PERCENT_DENOMENATOR * 10) / 100,
+      'cannot be more than 10%'
+    );
     _liquifyRate = _rate;
   }
 
@@ -224,7 +191,25 @@ contract GM is ERC20, Ownable {
     _swapEnabled = _enabled;
   }
 
+  function turnOffWithdraw() external onlyOwner {
+    require(canOwnerWithdraw, 'owner can not withdraw');
+    canOwnerWithdraw = false;
+  }
+
+  function withdrawTokens(address _tokenAddy, uint256 _amount)
+    external
+    onlyOwner
+  {
+    require(canOwnerWithdraw, 'owner can not withdraw');
+    require(_tokenAddy != address(this), 'cannot withdraw this token');
+    IERC20 _token = IERC20(_tokenAddy);
+    _amount = _amount > 0 ? _amount : _token.balanceOf(address(this));
+    require(_amount > 0, 'make sure there is a balance available to withdraw');
+    _token.transfer(owner(), _amount);
+  }
+
   function withdrawETH() external onlyOwner {
+    require(canOwnerWithdraw, 'owner can not withdraw');
     payable(owner()).call{ value: address(this).balance }('');
   }
 
