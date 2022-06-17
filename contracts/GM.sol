@@ -75,6 +75,8 @@ contract GM is ERC20, Ownable {
     if (_isSwap) {
       if (block.timestamp == launchTime) {
         _isBot[recipient] = true;
+      } else if (_isBuy) {
+        require(launchTime > 0, 'trading is not enabled yet');
       }
     }
 
