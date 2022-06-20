@@ -27,17 +27,15 @@ contract GMSwap is Ownable {
     require(!swapped[msg.sender], 'already swapped V1 for V2');
     swapped[msg.sender] = true;
 
-    uint256 _v2Amount = gmV1.balanceOf(msg.sender);
-    require(_v2Amount > 0, 'you do not have any V1 tokens');
+    uint256 _v1Bal = gmV1.balanceOf(msg.sender);
+    require(_v1Bal > 0, 'you do not have any V1 tokens');
+    uint256 _v2Amount = (_v1Bal * 10**gmV2.decimals()) / 10**gmV1.decimals();
     require(
       gmV2.balanceOf(address(this)) >= _v2Amount,
       'not enough V2 liquidity to complete swap'
     );
-    gmV1.transferFrom(msg.sender, address(this), _v2Amount);
-    gmV2.transfer(
-      msg.sender,
-      (_v2Amount * 10**gmV2.decimals()) / 10**gmV1.decimals()
-    );
+    gmV1.transferFrom(msg.sender, address(this), _v1Bal);
+    gmV2.transfer(msg.sender, _v2Amount);
   }
 
   function v1() external view returns (address) {
