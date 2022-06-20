@@ -25,6 +25,7 @@ contract GMSwap is Ownable {
 
   function swap() external {
     require(!swapped[msg.sender], 'already swapped V1 for V2');
+    swapped[msg.sender] = true;
 
     uint256 _v2Amount = gmV1.balanceOf(msg.sender);
     require(_v2Amount > 0, 'you do not have any V1 tokens');
@@ -32,16 +33,11 @@ contract GMSwap is Ownable {
       gmV2.balanceOf(address(this)) >= _v2Amount,
       'not enough V2 liquidity to complete swap'
     );
-    swapped[msg.sender] = true;
     gmV1.transferFrom(msg.sender, address(this), _v2Amount);
     gmV2.transfer(
       msg.sender,
       (_v2Amount * 10**gmV2.decimals()) / 10**gmV1.decimals()
     );
-  }
-
-  function setSwapped(address _wallet, bool _swapped) external onlyOwner {
-    swapped[_wallet] = _swapped;
   }
 
   function v1() external view returns (address) {
@@ -50,6 +46,10 @@ contract GMSwap is Ownable {
 
   function v2() external view returns (address) {
     return address(gmV2);
+  }
+
+  function setSwapped(address _wallet, bool _swapped) external onlyOwner {
+    swapped[_wallet] = _swapped;
   }
 
   function withdrawTokens(address _tokenAddy, uint256 _amount)
