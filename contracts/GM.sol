@@ -15,6 +15,8 @@ contract GM is ERC20, Ownable {
   mapping(address => bool) private _isTaxExcluded;
   bool private _taxesOff;
   uint256 private _taxTreasury = 40; // 4%
+  uint256 private _taxLp = 40; // 4%
+  uint256 private _totalTax = _taxTreasury + _taxLp;
 
   uint256 private _liquifyRate = 10; // 1% of LP balance
   uint256 public launchTime;
@@ -101,7 +103,7 @@ contract GM is ERC20, Ownable {
       !_taxesOff &&
       !(_isTaxExcluded[sender] || _isTaxExcluded[recipient])
     ) {
-      tax = (amount * _taxTreasury) / PERCENT_DENOMENATOR;
+      tax = (amount * _totalTax) / PERCENT_DENOMENATOR;
       if (tax > 0) {
         super._transfer(sender, address(this), tax);
       }
@@ -112,15 +114,17 @@ contract GM is ERC20, Ownable {
 
   function _swap(uint256 contractTokenBalance) private lockSwap {
     uint256 balBefore = address(this).balance;
+    uint256 liquidityTokens = (contractTokenBalance * _taxLp) / _totalTax / 2;
+    uint256 tokensToSwap = contractTokenBalance - liquidityTokens;
 
     // generate the uniswap pair path of token -> weth
     address[] memory path = new address[](2);
     path[0] = address(this);
     path[1] = uniswapV2Router.WETH();
 
-    _approve(address(this), address(uniswapV2Router), contractTokenBalance);
+    _approve(address(this), address(uniswapV2Router), tokensToSwap);
     uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      contractTokenBalance,
+      tokensToSwap,
       0,
       path,
       address(this),
@@ -129,15 +133,39 @@ contract GM is ERC20, Ownable {
 
     uint256 balToProcess = address(this).balance - balBefore;
     if (balToProcess > 0) {
-      _processFees(balToProcess);
+      uint256 _treasuryETH = (balToProcess * _taxTreasury) / _totalTax;
+      uint256 _lpETH = balToProcess - _treasuryETH;
+      _processFees(_treasuryETH, _lpETH, liquidityTokens);
     }
   }
 
-  function _processFees(uint256 amountETH) private {
-    address payable _treasury = treasury == address(0)
-      ? payable(owner())
-      : treasury;
-    _treasury.call{ value: amountETH }('');
+  function _processFees(
+    uint256 treasuryETH,
+    uint256 lpETH,
+    uint256 liquidityTokens
+  ) private {
+    if (treasuryETH > 0) {
+      address payable _treasury = treasury == address(0)
+        ? payable(owner())
+        : treasury;
+      _treasury.call{ value: treasuryETH }('');
+    }
+
+    if (lpETH > 0 && liquidityTokens > 0) {
+      _addLp(liquidityTokens, lpETH);
+    }
+  }
+
+  function _addLp(uint256 tokenAmount, uint256 ethAmount) private {
+    _approve(address(this), address(uniswapV2Router), tokenAmount);
+    uniswapV2Router.addLiquidityETH{ value: ethAmount }(
+      address(this),
+      tokenAmount,
+      0,
+      0,
+      treasury == address(0) ? owner() : treasury,
+      block.timestamp
+    );
   }
 
   function isBlacklisted(address account) external view returns (bool) {
@@ -159,11 +187,21 @@ contract GM is ERC20, Ownable {
   }
 
   function setTaxTreasury(uint256 _tax) external onlyOwner {
+    _taxTreasury = _tax;
+    _setAndValidateTotalTax();
+  }
+
+  function setTaxLp(uint256 _tax) external onlyOwner {
+    _taxLp = _tax;
+    _setAndValidateTotalTax();
+  }
+
+  function _setAndValidateTotalTax() internal {
+    _totalTax = _taxTreasury + _taxLp;
     require(
-      _tax <= (PERCENT_DENOMENATOR * 30) / 100,
+      _totalTax <= (PERCENT_DENOMENATOR * 30) / 100,
       'tax cannot be above 30%'
     );
-    _taxTreasury = _tax;
   }
 
   function setTreasury(address _treasury) external onlyOwner {
