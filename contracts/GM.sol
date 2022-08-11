@@ -36,7 +36,7 @@ contract GM is ERC20, Ownable {
     _swapping = false;
   }
 
-  constructor() ERC20('gm', 'GM') {
+  constructor() ERC20('gm', 'gm') {
     _mint(msg.sender, 1_000_000_000_000 * 10**18);
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
